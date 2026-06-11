@@ -1,4 +1,4 @@
-# YaFluentBot - English Tutor Telegram Bot
+# YaFluent - English Tutor Telegram Bot
 
 YaFluent Telegram bot designed to help users learn English using AI-powered tools and Spaced Repetition systems.
 
@@ -42,8 +42,8 @@ YaFluent/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/DianaYatsura/YaFluentBot.git
-cd YaFluentBot
+git clone https://github.com/DianaYatsura/YaFluent.git
+cd YaFluent
 ```
 
 ### 2. Configure Environment Variables
