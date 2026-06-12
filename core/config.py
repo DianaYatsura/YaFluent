@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     AZURE_SPEECH_REGION: str
 
     WEBHOOK_URL: str
+    USE_POLLING: bool = False
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(__file__), ".env"), extra="ignore"

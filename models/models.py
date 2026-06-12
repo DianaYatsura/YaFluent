@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db import Base
@@ -17,7 +17,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     telegram_id: Mapped[int] = mapped_column(unique=True, index=True)
     username: Mapped[str] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=get_utc_now)
+    english_level: Mapped[str] = mapped_column(String, default="A1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now
+    )
 
     user_words: Mapped[List["UserWord"]] = relationship(back_populates="user")
 
@@ -44,8 +47,12 @@ class UserWord(Base):
     word: Mapped[str] = mapped_column(String, index=True)
     translation: Mapped[str] = mapped_column(String)
 
-    last_reviewed: Mapped[datetime] = mapped_column(default=get_utc_now)
-    next_review: Mapped[datetime] = mapped_column(default=get_utc_now)
+    last_reviewed: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now
+    )
+    next_review: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now
+    )
     repetition_level: Mapped[int] = mapped_column(default=0)
 
     user: Mapped["User"] = relationship(back_populates="user_words")

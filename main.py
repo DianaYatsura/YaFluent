@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from aiogram import Bot, Dispatcher, types
@@ -12,10 +13,19 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: set webhook
-    await bot.set_webhook(settings.WEBHOOK_URL)
+    if settings.USE_POLLING:
+        # Startup: Start polling in background
+        print("Starting bot in Polling mode...")
+        asyncio.create_task(dp.start_polling(bot))
+    else:
+        # Startup: set webhook
+        print(f"Setting webhook to {settings.WEBHOOK_URL}")
+        await bot.set_webhook(settings.WEBHOOK_URL)
+
     yield
+
     # Shutdown: close bot session
+    print("Shutting down bot...")
     await bot.session.close()
 
 
