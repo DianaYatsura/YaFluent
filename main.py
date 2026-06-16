@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from fastapi import FastAPI
 
 from bot.handlers import start
+from bot.handlers.vocabulary import router as vocabulary_router
 from core.config import settings
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
@@ -13,18 +14,25 @@ dp = Dispatcher()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    polling_task = None
     if settings.USE_POLLING:
-        # Startup: Start polling in background
         print("Starting bot in Polling mode...")
-        asyncio.create_task(dp.start_polling(bot))
+        await bot.delete_webhook(drop_pending_updates=True)
+        polling_task = asyncio.create_task(dp.start_polling(bot))
     else:
-        # Startup: set webhook
         print(f"Setting webhook to {settings.WEBHOOK_URL}")
-        await bot.set_webhook(settings.WEBHOOK_URL)
+        await bot.set_webhook(settings.WEBHOOK_URL, drop_pending_updates=True)
 
     yield
 
-    # Shutdown: close bot session
+    if polling_task:
+        print("Stopping bot polling...")
+        polling_task.cancel()
+        try:
+            await polling_task
+        except asyncio.CancelledError:
+            print("Bot polling task cancelled.")
+
     print("Shutting down bot...")
     await bot.session.close()
 
@@ -32,6 +40,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 dp.include_router(start.router)
+dp.include_router(vocabulary_router)
 
 
 @app.post("/webhook")
