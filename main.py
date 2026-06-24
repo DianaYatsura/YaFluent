@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, types
 from fastapi import FastAPI
 
 from bot.handlers import start
+from bot.handlers.quiz import router as quiz_router
 from bot.handlers.vocabulary import router as vocabulary_router
 from core.config import settings
 
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 dp.include_router(start.router)
+dp.include_router(quiz_router)
 dp.include_router(vocabulary_router)
 
 

@@ -54,5 +54,6 @@ class UserWord(Base):
         DateTime(timezone=True), default=get_utc_now
     )
     repetition_level: Mapped[int] = mapped_column(default=0)
+    easiness_factor: Mapped[float] = mapped_column(default=2.5)
 
     user: Mapped["User"] = relationship(back_populates="user_words")

@@ -1,4 +1,5 @@
 from aiogram import F, Router, html
+from aiogram.filters import StateFilter
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
@@ -15,7 +16,7 @@ from services.openai_service import openai_service
 router = Router()
 
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(StateFilter(None), F.text & ~F.text.startswith("/"))
 async def handle_word_search(message: Message):
     if len(message.text) > 50:
         return await message.answer(
@@ -47,7 +48,7 @@ async def handle_word_search(message: Message):
             session.add(db_word)
             await session.commit()
 
-    text_response = (
+    msg = (
         f"📚 <b>Word:</b> {html.quote(parsed_word.word.upper())} "
         f"[{html.quote(parsed_word.ipa)}]\n"
         f"🏅 <b>Level:</b> {html.quote(parsed_word.cefr_level)}\n"
@@ -75,12 +76,13 @@ async def handle_word_search(message: Message):
 
     await waiting_msg.delete()
 
-    await message.answer(text_response, reply_markup=keyboard, parse_mode="HTML")
+    await message.answer(msg, reply_markup=keyboard, parse_mode="HTML")
 
     if audio_buffer:
         audio_file = BufferedInputFile(audio_buffer.getvalue(), filename="speech.mp3")
         await message.answer_voice(
-            voice=audio_file, caption=f"🗣 Вимова для слова '{parsed_word.word}'"
+            voice=audio_file,
+            caption=f"🗣 Вимова для слова '{parsed_word.word}'",
         )
 
 
@@ -95,16 +97,16 @@ async def handle_add_word(callback: CallbackQuery):
         user = user_result.scalar_one_or_none()
 
         if not user:
-            return await callback.answer("❌ Користувача не знайдено.", show_alert=True)
+            msg = "❌ Користувача не знайдено."
+            return await callback.answer(msg, show_alert=True)
 
         check_stmt = select(UserWord).where(
             UserWord.user_id == user.id, UserWord.word == word_to_add.lower()
         )
         check_result = await session.execute(check_stmt)
         if check_result.scalar_one_or_none():
-            return await callback.answer(
-                f"✅ Слово '{word_to_add}' вже є у твоєму словнику!"
-            )
+            msg = f"✅ Слово '{word_to_add}' вже є у твоєму словнику!"
+            return await callback.answer(msg)
 
         dict_stmt = select(DictionaryWord).where(
             DictionaryWord.word == word_to_add.lower()
@@ -121,6 +123,80 @@ async def handle_add_word(callback: CallbackQuery):
         session.add(new_user_word)
         await session.commit()
 
-    await callback.answer(f"✅ Слово '{dict_word.word}' додано до словника!")
+    msg_ok = f"✅ Слово '{dict_word.word}' додано до словника!"
+    await callback.answer(msg_ok)
 
-    await callback.message.edit_reply_markup(reply_markup=None)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📚 Повторити слова",
+                    callback_data="start_quiz_from_welcome",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📁 Збережені слова",
+                    callback_data="show_saved_words",
+                )
+            ],
+        ]
+    )
+
+    await callback.message.edit_reply_markup(reply_markup=keyboard)
+
+
+@router.callback_query(F.data == "show_saved_words")
+async def handle_show_saved_words(callback: CallbackQuery):
+    user_id = callback.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        user_stmt = select(User).where(User.telegram_id == user_id)
+        user_result = await session.execute(user_stmt)
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            msg = "❌ Користувача не знайдено."
+            return await callback.answer(msg, show_alert=True)
+
+        words_stmt = (
+            select(UserWord).where(UserWord.user_id == user.id).order_by(UserWord.word)
+        )
+        words_result = await session.execute(words_stmt)
+        user_words = words_result.scalars().all()
+
+        if not user_words:
+            msg = "Твій словник поки порожній. Додай нові слова!"
+            await callback.answer(msg)
+            return
+
+        response_text = "<b>📁 Твої збережені слова:</b>\n\n"
+        for i, uw in enumerate(user_words, 1):
+            response_text += (
+                f"{i}. <b>{html.quote(uw.word)}</b> — {html.quote(uw.translation)}\n"
+            )
+
+        if len(response_text) > 4000:
+            response_text = response_text[:3900] + "\n... (список занадто довгий)"
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📚 Повторити слова",
+                        callback_data="start_quiz_from_welcome",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📁 Збережені слова",
+                        callback_data="show_saved_words",
+                    )
+                ],
+            ]
+        )
+
+        await callback.message.answer(
+            response_text, reply_markup=keyboard, parse_mode="HTML"
+        )
+        await callback.answer()
