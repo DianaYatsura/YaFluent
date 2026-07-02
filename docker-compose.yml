@@ -57,5 +57,18 @@ services:
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION}
 
+  beat:
+    build: .
+    restart: always
+    command: celery -A tasks.worker beat --loglevel=info
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/yafluent
+
 volumes:
   postgres_data:
