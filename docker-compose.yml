@@ -3,6 +3,7 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
+    restart: always
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -14,11 +15,13 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: always
     ports:
       - "6379:6379"
 
   web:
     build: .
+    restart: always
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
       - .:/app
@@ -39,6 +42,7 @@ services:
 
   worker:
     build: .
+    restart: always
     command: celery -A tasks.worker worker --loglevel=info
     depends_on:
       - db
