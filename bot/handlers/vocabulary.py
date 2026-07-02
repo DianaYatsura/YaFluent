@@ -1,5 +1,6 @@
 from aiogram import F, Router, html
 from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
@@ -9,6 +10,7 @@ from aiogram.types import (
 )
 from sqlalchemy import select
 
+from bot.states import PracticeStates
 from core.db import AsyncSessionLocal
 from models.models import DictionaryWord, User, UserWord
 from services.openai_service import openai_service
@@ -66,7 +68,13 @@ async def handle_word_search(message: Message):
                     text="➕ Додати до словника",
                     callback_data=f"add_word:{parsed_word.word[:30]}",
                 )
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗣 Потренувати вимову",
+                    callback_data=f"practice_pronunciation:{parsed_word.word[:30]}",
+                )
+            ],
         ]
     )
 
@@ -146,6 +154,19 @@ async def handle_add_word(callback: CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
 
+@router.callback_query(F.data.startswith("practice_pronunciation:"))
+async def handle_practice_pronunciation(callback: CallbackQuery, state: FSMContext):
+    word = callback.data.split(":", 1)[1]
+    await state.set_state(PracticeStates.waiting_for_voice)
+    await state.update_data(practice_word=word)
+
+    await callback.message.answer(
+        f"Надішли голосове повідомлення, де ти вимовляєш слово: <b>{word}</b>",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "show_saved_words")
 async def handle_show_saved_words(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -156,7 +177,7 @@ async def handle_show_saved_words(callback: CallbackQuery):
         user = user_result.scalar_one_or_none()
 
         if not user:
-            msg = "❌ Користувача не знайдено."
+            msg = "Користувача не знайдено."
             return await callback.answer(msg, show_alert=True)
 
         words_stmt = (
@@ -171,16 +192,18 @@ async def handle_show_saved_words(callback: CallbackQuery):
             return
 
         response_text = "<b>📁 Твої збережені слова:</b>\n\n"
-        for i, uw in enumerate(user_words, 1):
-            response_text += (
-                f"{i}. <b>{html.quote(uw.word)}</b> — {html.quote(uw.translation)}\n"
+        keyboard_buttons = []
+        for uw in user_words:
+            keyboard_buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"📖 {uw.word}", callback_data=f"view_word:{uw.word[:30]}"
+                    )
+                ]
             )
 
-        if len(response_text) > 4000:
-            response_text = response_text[:3900] + "\n... (список занадто довгий)"
-
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
+        keyboard_buttons.extend(
+            [
                 [
                     InlineKeyboardButton(
                         text="📚 Повторити слова",
@@ -189,14 +212,57 @@ async def handle_show_saved_words(callback: CallbackQuery):
                 ],
                 [
                     InlineKeyboardButton(
-                        text="📁 Збережені слова",
+                        text="🔄 Оновити список",
                         callback_data="show_saved_words",
                     )
                 ],
             ]
         )
 
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+
         await callback.message.answer(
             response_text, reply_markup=keyboard, parse_mode="HTML"
         )
         await callback.answer()
+
+
+@router.callback_query(F.data.startswith("view_word:"))
+async def handle_view_word(callback: CallbackQuery):
+    word_text = callback.data.split(":", 1)[1]
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(DictionaryWord).where(DictionaryWord.word == word_text.lower())
+        result = await session.execute(stmt)
+        db_word = result.scalar_one_or_none()
+
+    if not db_word:
+        return await callback.answer("❌ Слово не знайдено в базі.", show_alert=True)
+
+    msg = (
+        f"📚 <b>Word:</b> {html.quote(db_word.word.upper())}\n"
+        f"🇺🇦 <b>Переклад:</b> {html.quote(db_word.translation)}\n\n"
+        f"📖 <b>Definition:</b> {html.quote(db_word.definition or 'N/A')}\n\n"
+        f"💡 <b>Example:</b>\n"
+        f"• {html.quote(db_word.example_sentence or 'N/A')}\n"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗣 Потренувати вимову",
+                    callback_data=f"practice_pronunciation:{db_word.word[:30]}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📁 Назад до списку",
+                    callback_data="show_saved_words",
+                )
+            ],
+        ]
+    )
+
+    await callback.message.answer(msg, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()

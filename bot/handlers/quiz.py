@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from aiogram import F, Router, html
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -12,16 +11,12 @@ from aiogram.types import (
 )
 from sqlalchemy import select, update
 
+from bot.states import QuizStates
 from core.db import AsyncSessionLocal
 from models.models import User, UserWord
 from services.spaced_repetition import sm2_calculate
 
 router = Router()
-
-
-class QuizStates(StatesGroup):
-    waiting_for_answer = State()
-    hint_level = State()
 
 
 @router.message(Command("stop"))
@@ -514,17 +509,25 @@ async def show_translation(callback: CallbackQuery):
             return await callback.answer("Слово не знайдено.")
 
         btns = [
-            InlineKeyboardButton(
-                text="❌ Не знаю", callback_data=f"quiz_rate:1:{word.id}"
-            ),
-            InlineKeyboardButton(
-                text="🤔 Важко", callback_data=f"quiz_rate:3:{word.id}"
-            ),
-            InlineKeyboardButton(
-                text="✅ Знаю", callback_data=f"quiz_rate:5:{word.id}"
-            ),
+            [
+                InlineKeyboardButton(
+                    text="❌ Не знаю", callback_data=f"quiz_rate:1:{word.id}"
+                ),
+                InlineKeyboardButton(
+                    text="🤔 Важко", callback_data=f"quiz_rate:3:{word.id}"
+                ),
+                InlineKeyboardButton(
+                    text="✅ Знаю", callback_data=f"quiz_rate:5:{word.id}"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗣 Потренувати вимову",
+                    callback_data=f"practice_pronunciation:{word.word[:30]}",
+                )
+            ],
         ]
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[btns])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=btns)
 
         msg = f"Слово: <b>{word.word}</b>\nПереклад: <b>{word.translation}</b>"
         await callback.message.edit_text(msg, reply_markup=keyboard, parse_mode="HTML")

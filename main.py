@@ -2,15 +2,20 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from aiogram import Bot, Dispatcher, types
+from aiogram.fsm.storage.redis import RedisStorage
 from fastapi import FastAPI
+from redis.asyncio import Redis
 
 from bot.handlers import start
+from bot.handlers.pronunciation import router as pronunciation_router
 from bot.handlers.quiz import router as quiz_router
 from bot.handlers.vocabulary import router as vocabulary_router
 from core.config import settings
 
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-dp = Dispatcher()
+redis = Redis.from_url(settings.REDIS_URL)
+storage = RedisStorage(redis)
+dp = Dispatcher(storage=storage)
 
 
 @asynccontextmanager
@@ -43,6 +48,7 @@ app = FastAPI(lifespan=lifespan)
 dp.include_router(start.router)
 dp.include_router(quiz_router)
 dp.include_router(vocabulary_router)
+dp.include_router(pronunciation_router)
 
 
 @app.post("/webhook")
